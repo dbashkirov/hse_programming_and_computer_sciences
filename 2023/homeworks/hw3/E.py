@@ -1,162 +1,114 @@
 import sys
 
-M = 2 * 10 ** 5
-P = 16769023
-A = 31
-
-
-def hash_function(x, capacity):
-    res = 0
-    for i in reversed(x):
-        res = (res * A + ord(i)) % P
-    return res % capacity
+MAX_SAMPLES = 10 ** 5
 
 
 class Node:
-    def __init__(self, data=None, global_prev=None):
-        self.data = data
-        self.next = None
-        self.global_prev = global_prev
-        self.global_next = None
-
-
-class LinkedMap:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.arr = [None] * capacity
-        self.global_prev = None
-
-    def put(self, data):
-        index = hash_function(data, self.capacity)
-        if self.arr[index] is None:
-            self.arr[index] = Node(data=data, global_prev=self.global_prev)
-            if self.global_prev is not None:
-                self.global_prev.global_next = self.arr[index]
-            self.global_prev = self.arr[index]
-            return
-        node = self.arr[index]
-        while node is not None:
-            if node.data == data:
-                return
-            prev_node = node
-            node = node.next
-        new_node = Node(data=data, global_prev=self.global_prev)
-        self.global_prev.global_next = new_node
-        prev_node.next = new_node
-        self.global_prev = new_node
-
-    def delete(self, data):
-        index = hash_function(data, self.capacity)
-        if self.arr[index] is None:
-            return
-        prev_node = None
-        node = self.arr[index]
-        while node is not None:
-            if node.data == data:
-                if node.global_prev is None and node.global_next is None:
-                    self.global_prev = None
-                elif node.global_next is None:
-                    self.global_prev = node.global_prev
-                    node.global_prev.global_next = None
-                elif node.global_prev is None:
-                    node.global_next.global_prev = None
-                else:
-                    node.global_prev.global_next = node.global_next
-                    node.global_next.global_prev = node.global_prev
-                if prev_node is None:
-                    self.arr[index] = node.next
-                else:
-                    prev_node.next = node.next
-                return
-            prev_node = node
-            node = node.next
-
-    def get_all(self):
-        elements = []
-        node = self.global_prev
-        while node is not None:
-            elements.append(node.data)
-            node = node.global_prev
-        return elements
-
-
-class LinkedList:
-    def __init__(self, key, capacity):
+    def __init__(self, key=None, val='none', previous=None, next=None):
         self.key = key
-        self.linked_map = LinkedMap(capacity)
-        self.next = None
+        self.val = val
+        self.next_node = None
+        self.previous = previous
+        self.next = next
+
+    def set(self, key, val, previous, next, next_node):
+        self.key = key
+        self.val = val
+        self.previous = previous
+        self.next = next
+        self.next_node = next_node
 
 
-class MultiMap:
-    def __init__(self):
-        self.arr = [None] * M
+class MyLinkedMap:
+    def __init__(self, arr_size, a_value=7, p_value=31):
+        self.a_value = a_value
+        self.p_value = p_value
+        self.arr_size = arr_size
+        self.hash_arr = [Node() for _ in range(arr_size)]
+        self.curr_node = Node(previous=Node())
 
-    def put(self, key, data):
-        index = hash_function(key, M)
-        if self.arr[index] is None:
-            self.arr[index] = LinkedList(key, M // 1000)
-            self.arr[index].linked_map.put(data)
+    def hash_function(self, str_val):
+        hash_val = 0
+        for char_val in str_val:
+            hash_val = (hash_val * self.a_value + ord(char_val)) % self.p_value
+        return hash_val % self.arr_size
+
+    def insert(self, key_val, str_val):
+        hash_key_val = self.hash_function(key_val)
+        inode = self.hash_arr[hash_key_val]
+        while True:
+            if inode.key is None:
+                inode.set(key_val, str_val, previous=self.curr_node, next=Node(), next_node=Node())
+                self.curr_node.next = inode
+                self.curr_node = inode
+                return 'new'
+            elif inode.key == key_val:
+                inode.val = str_val
+                return 'overwrite'
+            else:
+                inode = inode.next_node
+
+    def delete(self, key_val):
+        hash_key_val = self.hash_function(key_val)
+        inode = self.hash_arr[hash_key_val]
+        if self.curr_node.key == key_val:
+            self.curr_node = self.curr_node.previous
+        if inode.key == key_val:
+            inode.next.previous = inode.previous
+            inode.previous.next = inode.next
+            self.hash_arr[hash_key_val] = inode.next_node
             return
-        node = self.arr[index]
-        while node is not None:
-            if node.key == key:
-                node.linked_map.put(data)
+        while inode.next_node:
+            if inode.next_node.key == key_val:
+                inode.next_node.previous.next = inode.next_node.next
+                inode.next_node.next.previous = inode.next_node.previous
+                inode.next_node = inode.next_node.next_node
                 return
-            prev_node = node
-            node = node.next
-        new_node = LinkedList(key, M // 1000)
-        new_node.linked_map.put(data)
-        prev_node.next = new_node
+            else:
+                inode = inode.next_node
+        return
 
-    def get(self, key):
-        index = hash_function(key, M)
-        if self.arr[index] is None:
-            return 0
-        node = self.arr[index]
-        while node is not None:
-            if node.key == key:
-                elements = node.linked_map.get_all()
-                if len(elements) == 0:
-                    return 0
-                return str(len(elements)) + ' ' + ' '.join(reversed(elements))
-            node = node.next
-        return 0
+    def get(self, key_val):
+        hash_key_val = self.hash_function(key_val)
+        inode = self.hash_arr[hash_key_val]
+        while True:
+            if inode.key is None:
+                return 'none'
+            elif inode.key == key_val:
+                return inode.val
+            else:
+                inode = inode.next_node
 
-    def delete(self, key, data):
-        index = hash_function(key, M)
-        node = self.arr[index]
-        if node is not None:
-            while node is not None:
-                if node.key == key:
-                    node.linked_map.delete(data)
-                    return
-                node = node.next
+    def prev(self, key_val):
+        hash_key_val = self.hash_function(key_val)
+        inode = self.hash_arr[hash_key_val]
+        while inode.key != key_val:
+            if inode.key is None:
+                return 'none'
+            inode = inode.next_node
+        return inode.previous.val
 
-    def delete_all(self, key):
-        index = hash_function(key, M)
-        if self.arr[index] is None:
-            return
-        node = self.arr[index]
-        prev_node = None
-        while node is not None:
-            if node.key == key:
-                if prev_node is None:
-                    self.arr[index] = node.next
-                else:
-                    prev_node.next = node.next
-                return
-            prev_node = node
-            node = node.next
+    def next(self, key_val):
+        hash_key_val = self.hash_function(key_val)
+        inode = self.hash_arr[hash_key_val]
+        while inode.key != key_val:
+            if inode.key is None:
+                return 'none'
+            inode = inode.next_node
+        return inode.next.val
 
 
-array = MultiMap()
+size = MAX_SAMPLES * 2
+my_map = MyLinkedMap(size, a_value=7, p_value=171723191)
 for line in sys.stdin:
-    command = line.split()
-    if command[0] == "put":
-        array.put(command[1], command[2])
-    elif command[0] == "get":
-        print(array.get(command[1]))
-    elif command[0] == "delete":
-        array.delete(command[1], command[2])
-    elif command[0] == "deleteall":
-        array.delete_all(command[1])
+    opp = line.split()
+    if opp[0] == 'put':
+        my_map.insert(opp[1], opp[2])
+    elif opp[0] == 'delete':
+        my_map.delete(opp[1])
+    elif opp[0] == 'get':
+        print(my_map.get(opp[1]))
+    elif opp[0] == 'prev':
+        print(my_map.prev(opp[1]))
+    elif opp[0] == 'next':
+        print(my_map.next(opp[1]))
